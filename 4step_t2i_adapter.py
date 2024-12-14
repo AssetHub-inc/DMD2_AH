@@ -1,4 +1,5 @@
 import os
+import time
 from argparse import ArgumentParser, Namespace
 
 from diffusers import DiffusionPipeline, StableDiffusionXLAdapterPipeline, T2IAdapter, AutoencoderKL, UNet2DConditionModel, LCMScheduler
@@ -55,6 +56,7 @@ def generate_images(
     # Detect the canny map in low resolution to avoid high-frequency details
     image = canny_detector(image, detect_resolution=384, image_resolution=1024)#.resize((1024, 1024))
 
+    begin = time.time()
     pipeline_output: StableDiffusionXLPipelineOutput = pipe(
         prompt=prompt,
         image=image,
@@ -65,6 +67,8 @@ def generate_images(
         adapter_conditioning_factor=adapter_conditioning_factor,
         timesteps=timesteps,
     )
+    end = time.time()
+    print(f"Image generation time: {end - begin:.2f}sec")
     gen_images = pipeline_output.images
     
     return gen_images
