@@ -20,5 +20,12 @@ imageio
 piq==0.7.0 
 safetensors 
 gradio 
-huggingface-hub==0.22.0 
 clean-fid
+mediapipe
+
+# Avoid "A module that was compiled using NumPy 1.x cannot be run NumPy 2.2.0 as it may crash."
+numpy<2.0
+
+# Avoid "ImportError: cannot import name 'HFValidationError' from 'huggingface_hub.errors'"
+# and ImportError: cannot import name 'cached_download' from 'huggingface_hub'
+huggingface_hub<0.26
