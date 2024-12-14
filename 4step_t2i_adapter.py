@@ -5,9 +5,12 @@ from huggingface_hub import hf_hub_download
 import torch
 
 
-def prepare_pipe():
+def prepare_pipe(
+    t2i_adapter_name="TencentARC/t2i-adapter-canny-sdxl-1.0",
+) -> DiffusionPipeline:
+
     # load adapter
-    adapter = T2IAdapter.from_pretrained("TencentARC/t2i-adapter-canny-sdxl-1.0", torch_dtype=torch.float16, varient="fp16").to("cuda")
+    adapter = T2IAdapter.from_pretrained(t2i_adapter_name, torch_dtype=torch.float16, varient="fp16").to("cuda")
 
     vae=AutoencoderKL.from_pretrained("madebyollin/sdxl-vae-fp16-fix", torch_dtype=torch.float16)
 
