@@ -1,4 +1,7 @@
+import os
+
 from diffusers import DiffusionPipeline, StableDiffusionXLAdapterPipeline, T2IAdapter, AutoencoderKL, UNet2DConditionModel, LCMScheduler
+from diffusers.pipelines.stable_diffusion_xl.pipeline_output import StableDiffusionXLPipelineOutput
 from diffusers.utils import load_image
 from controlnet_aux.canny import CannyDetector
 from huggingface_hub import hf_hub_download
@@ -31,7 +34,7 @@ def prepare_pipe(
     return pipe
 
 
-def generate_image(
+def generate_images(
     pipe: DiffusionPipeline,
     image: str | Image.Image = "https://huggingface.co/Adapter/t2iadapter/resolve/main/figs_SDXLV1.0/org_canny.jpg",
     prompt = "Mystical fairy in real, magic, 4k picture, high quality",
@@ -40,8 +43,7 @@ def generate_image(
     adapter_conditioning_scale=0.8, 
     adapter_conditioning_factor=0.5,
     timesteps=[999, 749, 499, 249],
-    save_path="outputs/out_canny.png",
-):
+) -> list[Image.Image]:
 
     image = load_image(image)
     canny_detector = CannyDetector()
@@ -49,7 +51,7 @@ def generate_image(
     # Detect the canny map in low resolution to avoid high-frequency details
     image = canny_detector(image, detect_resolution=384, image_resolution=1024)#.resize((1024, 1024))
 
-    gen_images: Image.Image = pipe(
+    pipeline_output: StableDiffusionXLPipelineOutput = pipe(
         prompt=prompt,
         image=image,
         num_inference_steps=num_inference_steps,
@@ -57,10 +59,25 @@ def generate_image(
         adapter_conditioning_scale=adapter_conditioning_scale, 
         adapter_conditioning_factor=adapter_conditioning_factor,
         timesteps=timesteps,
-    ).images[0]
-    gen_images.save(save_path)
+    )
+    gen_images = pipeline_output.images
+    
+    return gen_images
+
+
+def save_images(images: list[Image.Image], save_path="outputs/out_canny.png"):
+    if len(images) == 0:
+        raise ValueError("Input: `images` was empty.")
+    if len(images) == 1:
+        images[0].save(save_path)
+    else:
+        base, ext = os.path.splitext(save_path)
+        for i, img in enumerate(images):
+            save_path_numbered = f"{base}-{str(i)}{ext}"
+            img.save(save_path_numbered)
 
 
 if __name__ == "__main__":
     pipe = prepare_pipe()
-    generate_image(pipe=pipe)
+    gen_images = generate_images(pipe=pipe)
+    save_images(gen_images)
