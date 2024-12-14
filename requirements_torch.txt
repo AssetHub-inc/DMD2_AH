@@ -1,0 +1,6 @@
+# Specify CUDA versions by -i, --index-url, or --extra-index-url
+# For example, for CUDA 11.8:
+# pip install requirements_torch.txt --index-url https://download.pytorch.org/whl/cu118
+torch
+torchvision
+xformers
