@@ -1,4 +1,5 @@
 import os
+from argparse import ArgumentParser, Namespace
 
 from diffusers import DiffusionPipeline, StableDiffusionXLAdapterPipeline, T2IAdapter, AutoencoderKL, UNet2DConditionModel, LCMScheduler
 from diffusers.pipelines.stable_diffusion_xl.pipeline_output import StableDiffusionXLPipelineOutput
@@ -11,6 +12,7 @@ import torch
 
 def prepare_pipe(
     t2i_adapter_name="TencentARC/t2i-adapter-canny-sdxl-1.0",
+    **kwargs,
 ) -> DiffusionPipeline:
 
     # load adapter
@@ -39,10 +41,12 @@ def generate_images(
     image: str | Image.Image = "https://huggingface.co/Adapter/t2iadapter/resolve/main/figs_SDXLV1.0/org_canny.jpg",
     prompt = "Mystical fairy in real, magic, 4k picture, high quality",
     num_inference_steps=4,
+    num_images_per_prompt=1,
     guidance_scale=0,
     adapter_conditioning_scale=0.8, 
     adapter_conditioning_factor=0.5,
     timesteps=[999, 749, 499, 249],
+    **kwargs,
 ) -> list[Image.Image]:
 
     image = load_image(image)
@@ -55,6 +59,7 @@ def generate_images(
         prompt=prompt,
         image=image,
         num_inference_steps=num_inference_steps,
+        num_images_per_prompt=num_images_per_prompt,
         guidance_scale=guidance_scale,
         adapter_conditioning_scale=adapter_conditioning_scale, 
         adapter_conditioning_factor=adapter_conditioning_factor,
@@ -77,7 +82,28 @@ def save_images(images: list[Image.Image], save_path="outputs/out_canny.png"):
             img.save(save_path_numbered)
 
 
+def parse_kwargs(omit_none=True) -> Namespace:
+    parser = ArgumentParser()
+
+    parser.add_argument("--prompt", type=str)
+    parser.add_argument("--image", type=str)
+    parser.add_argument("--num_inference_steps", "--steps", type=int)
+    parser.add_argument("--num_images_per_prompt", "--batchsize", type=int)
+
+    args = parser.parse_args()
+    kwargs = vars(args)
+
+    if omit_none:
+        kwargs = {key: val for key, val in kwargs.items() if val is not None}
+
+    return kwargs
+
+
 if __name__ == "__main__":
-    pipe = prepare_pipe()
-    gen_images = generate_images(pipe=pipe)
+    kwargs = parse_kwargs()
+    print(f"kwargs:\n{kwargs}")
+
+    pipe = prepare_pipe(**kwargs)
+    gen_images = generate_images(pipe=pipe, **kwargs)
+
     save_images(gen_images)
