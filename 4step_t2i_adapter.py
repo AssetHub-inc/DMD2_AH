@@ -166,9 +166,6 @@ def parse_kwargs(omit_none=True) -> Namespace:
 
 
 if __name__ == "__main__":
-    print(f"{PREPROCESSOR_NAME = }")
-    print(f"{vars(PREPROCESSOR_NAME) = }")
-    print(f"{typing.get_args(PREPROCESSOR_NAME) = }")
     kwargs = parse_kwargs()
     print(f"kwargs:\n{kwargs}")
 
