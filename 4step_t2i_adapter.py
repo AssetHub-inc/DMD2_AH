@@ -57,10 +57,10 @@ def load_preprocessors(
             preprosessor = CannyDetector()
 
         elif name == "depth_midas":
-            preprosessor = MidasDetector.from_pretrained("lllyasviel/ControlNet").to("cuda")
+            preprosessor = MidasDetector.from_pretrained("lllyasviel/Annotators").to("cuda")
 
         elif name == "depth_zoe":
-            preprosessor = ZoeDetector.from_pretrained("lllyasviel/ControlNet").to("cuda")
+            preprosessor = ZoeDetector.from_pretrained("lllyasviel/Annotators").to("cuda")
 
         elif name == "none":
             preprosessor = None
