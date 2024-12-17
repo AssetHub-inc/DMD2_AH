@@ -59,14 +59,14 @@ def load_preprocessors(
         elif name == "depth_midas":
             preprosessor = MidasDetector.from_pretrained("lllyasviel/ControlNet").to("cuda")
 
-        elif name == "depth_midas":
+        elif name == "depth_zoe":
             preprosessor = ZoeDetector.from_pretrained("lllyasviel/ControlNet").to("cuda")
 
         elif name == "none":
             preprosessor = None
 
         else:
-            raise ValueError(f"Preprocessor name: {name} is not in {PREPROCESSOR_NAME}")
+            raise ValueError(f"Preprocessor name: '{name}' is not in {PREPROCESSOR_NAME}")
 
         preprocessors.append(preprosessor)
 
