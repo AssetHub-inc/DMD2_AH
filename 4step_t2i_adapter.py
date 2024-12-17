@@ -4,7 +4,7 @@ import typing
 from argparse import ArgumentParser, Namespace
 from typing import Literal, Union
 
-from diffusers import DiffusionPipeline, StableDiffusionXLAdapterPipeline, T2IAdapter, AutoencoderKL, UNet2DConditionModel, LCMScheduler
+from diffusers import DiffusionPipeline, StableDiffusionXLAdapterPipeline, T2IAdapter, MultiAdapter, AutoencoderKL, UNet2DConditionModel, LCMScheduler
 from diffusers.pipelines.stable_diffusion_xl.pipeline_output import StableDiffusionXLPipelineOutput
 from diffusers.utils import load_image
 from controlnet_aux.canny import CannyDetector
@@ -14,18 +14,42 @@ from huggingface_hub import hf_hub_download
 from PIL import Image
 import torch
 
+
+# Orders of T2I_ADAPTER_NAME and T2I_ADAPTER_FULLNAME should match
+T2I_ADAPTER_NAME = Literal["canny", "depth_midas", "depth_zoe"]
+T2I_ADAPTER_FULLNAME = Literal[
+    "TencentARC/t2i-adapter-canny-sdxl-1.0",
+    "TencentARC/t2i-adapter-depth-midas-sdxl-1.0",
+    "TencentARC/t2i-adapter-depth-zoe-sdxl-1.0",
+]
+T2I_ADAPTER_NAME_TO_FULLNAME = {
+    name: fullname for name, fullname in
+    zip(typing.get_args(T2I_ADAPTER_NAME), typing.get_args(T2I_ADAPTER_FULLNAME))
+}
+print(f"{T2I_ADAPTER_NAME_TO_FULLNAME = }")
+
 PREPROCESSOR = Union[CannyDetector, ZoeDetector, MidasDetector, None]
 PREPROCESSOR_NAME = Literal["canny", "depth_midas", "depth_zoe", "none"]
 
 
+def load_adapters(t2i_adapter_names: list[T2I_ADAPTER_NAME] = ["canny"]
+                  ) -> T2IAdapter | MultiAdapter:
+
+    t2i_adapter_fullnames = [T2I_ADAPTER_NAME_TO_FULLNAME[name] for name in t2i_adapter_names]
+    adapters = [T2IAdapter.from_pretrained(name, torch_dtype=torch.float16, varient="fp16").to("cuda")
+                for name in t2i_adapter_fullnames]
+    if len(adapters) == 1:
+        return adapters[0]
+    else:
+        return MultiAdapter(adapters)
+
+
 def prepare_pipe(
-    t2i_adapter_name="TencentARC/t2i-adapter-canny-sdxl-1.0",
+    t2i_adapter_names: list[T2I_ADAPTER_NAME] = ["canny"],
     **kwargs,
 ) -> DiffusionPipeline:
 
-    # load adapter
-    adapter = T2IAdapter.from_pretrained(t2i_adapter_name, torch_dtype=torch.float16, varient="fp16").to("cuda")
-
+    adapter = load_adapters(t2i_adapter_names)
     vae=AutoencoderKL.from_pretrained("madebyollin/sdxl-vae-fp16-fix", torch_dtype=torch.float16)
 
     base_model_id = "stabilityai/stable-diffusion-xl-base-1.0"
@@ -114,6 +138,9 @@ def generate_images(
 
     image = load_image(image)
     control_images = preprocess_images(image, preprocessors)
+    
+    if len(control_images) > 1:
+        adapter_conditioning_scale = [adapter_conditioning_scale] * len(control_images)
 
     begin = time.time()
     pipeline_output: StableDiffusionXLPipelineOutput = pipe(
@@ -122,7 +149,7 @@ def generate_images(
         num_inference_steps=num_inference_steps,
         num_images_per_prompt=num_images_per_prompt,
         guidance_scale=guidance_scale,
-        adapter_conditioning_scale=adapter_conditioning_scale, 
+        adapter_conditioning_scale=adapter_conditioning_scale,
         adapter_conditioning_factor=adapter_conditioning_factor,
         timesteps=timesteps,
     )
@@ -147,7 +174,8 @@ def save_images(images: list[Image.Image], save_path="outputs/out_canny.png"):
 
 def parse_kwargs(omit_none=True) -> Namespace:
     parser = ArgumentParser()
-
+    parser.add_argument("--t2i_adapter_names", type=str, nargs="+",
+                        choices=typing.get_args(T2I_ADAPTER_NAME)) # list[T2I_ADAPTER_NAME]
     parser.add_argument("--preprocessor_names", type=str, nargs="+",
                         choices=typing.get_args(PREPROCESSOR_NAME)) # list[PREPROCESSOR_NAME]
     parser.add_argument("--prompt", type=str)
