@@ -127,6 +127,7 @@ def generate_images(
     preprocessors: list[PREPROCESSOR],
     image: str | Image.Image = "https://huggingface.co/Adapter/t2iadapter/resolve/main/figs_SDXLV1.0/org_canny.jpg",
     prompt = "Mystical fairy in real, magic, 4k picture, high quality",
+    negative_prompt="",
     num_inference_steps=4,
     num_images_per_prompt=1,
     guidance_scale=0,
@@ -145,6 +146,7 @@ def generate_images(
     begin = time.time()
     pipeline_output: StableDiffusionXLPipelineOutput = pipe(
         prompt=prompt,
+        negative_prompt=negative_prompt,
         image=control_images,
         num_inference_steps=num_inference_steps,
         num_images_per_prompt=num_images_per_prompt,
@@ -179,6 +181,7 @@ def parse_kwargs(omit_none=True) -> Namespace:
     parser.add_argument("--preprocessor_names", type=str, nargs="+",
                         choices=typing.get_args(PREPROCESSOR_NAME)) # list[PREPROCESSOR_NAME]
     parser.add_argument("--prompt", type=str)
+    parser.add_argument("--negative_prompt", type=str)
     parser.add_argument("--image", type=str)
     parser.add_argument("--num_inference_steps", "--steps", type=int)
     parser.add_argument("--num_images_per_prompt", "--batchsize", type=int)
