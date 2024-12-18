@@ -131,7 +131,7 @@ def generate_images(
     num_inference_steps=4,
     num_images_per_prompt=1,
     guidance_scale=0,
-    adapter_conditioning_scale=0.8, 
+    adapter_conditioning_scale: float | list[float] = 0.8, 
     adapter_conditioning_factor=0.5,
     timesteps=[999, 749, 499, 249],
     **kwargs,
@@ -140,8 +140,18 @@ def generate_images(
     image = load_image(image)
     control_images = preprocess_images(image, preprocessors)
     
-    if len(control_images) > 1:
-        adapter_conditioning_scale = [adapter_conditioning_scale] * len(control_images)
+    if len(control_images) == 1: # Single T2I Adapter
+        # It needs to be a single float value
+        if isinstance(adapter_conditioning_scale, list):
+            # list[float] (len == 1) -> float
+            adapter_conditioning_scale = adapter_conditioning_scale[0]
+    else: # Multiple T2I Adapters
+        if isinstance(adapter_conditioning_scale, (float, int)):
+            adapter_conditioning_scale = [adapter_conditioning_scale]
+        # If original input is float or list[float] of length 1.
+        # Skip otherwise (multiple scales are already provided, which will be used directly)
+        if len(adapter_conditioning_scale) == 1:
+            adapter_conditioning_scale = adapter_conditioning_scale * len(control_images)
 
     begin = time.time()
     pipeline_output: StableDiffusionXLPipelineOutput = pipe(
@@ -186,6 +196,7 @@ def parse_kwargs(omit_none=True) -> Namespace:
     parser.add_argument("--num_inference_steps", "--steps", type=int)
     parser.add_argument("--num_images_per_prompt", "--batchsize", type=int)
     parser.add_argument("--guidance_scale", "--cfg_scale", type=float)
+    parser.add_argument("--adapter_conditioning_scale", type=float, nargs="*") # list[float], Optional
 
     args = parser.parse_args()
     kwargs = vars(args)
