@@ -32,12 +32,15 @@ PREPROCESSOR = Union[CannyDetector, ZoeDetector, MidasDetector, None]
 PREPROCESSOR_NAME = Literal["canny", "depth_midas", "depth_zoe", "none"]
 
 
+def load_t2i_adapter(name: T2I_ADAPTER_NAME):
+    fullname = T2I_ADAPTER_NAME_TO_FULLNAME[name]
+    return T2IAdapter.from_pretrained(fullname, torch_dtype=torch.float16, varient="fp16").to("cuda")
+
+
 def load_adapters(t2i_adapter_names: list[T2I_ADAPTER_NAME] = ["canny"]
                   ) -> T2IAdapter | MultiAdapter:
 
-    t2i_adapter_fullnames = [T2I_ADAPTER_NAME_TO_FULLNAME[name] for name in t2i_adapter_names]
-    adapters = [T2IAdapter.from_pretrained(name, torch_dtype=torch.float16, varient="fp16").to("cuda")
-                for name in t2i_adapter_fullnames]
+    adapters = [load_t2i_adapter(name) for name in t2i_adapter_names]
     if len(adapters) == 1:
         return adapters[0]
     else:
