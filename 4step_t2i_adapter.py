@@ -7,6 +7,7 @@ from typing import Literal, Union
 from diffusers import DiffusionPipeline, StableDiffusionXLAdapterPipeline, T2IAdapter, MultiAdapter, AutoencoderKL, UNet2DConditionModel, LCMScheduler
 from diffusers.models import ControlNetModel
 from diffusers.pipelines.stable_diffusion_xl.pipeline_output import StableDiffusionXLPipelineOutput
+from diffusers.schedulers.scheduling_utils import SchedulerMixin
 from diffusers.utils import load_image
 from controlnet_aux.canny import CannyDetector
 from controlnet_aux.zoe import ZoeDetector
@@ -48,9 +49,28 @@ def load_adapters(t2i_adapter_names: list[T2I_ADAPTER_NAME] = ["canny"]
         return MultiAdapter(adapters)
 
 
+DMD2_TIMESTEPS = [999, 749, 499, 249]
+
+def inject_timesteps_into_scheduler(scheduler_cls: SchedulerMixin, timesteps=DMD2_TIMESTEPS):
+    class SchedulerWithFixedTimesteps(scheduler_cls):
+        def __init__(self): 
+            super().__init__()
+
+        # Inject hard coded timesteps for DMD2
+        # `num_inference_steps` will be ignored
+        def set_timesteps(self, num_inference_steps: int | None = 4, **kwargs):
+            print(f"{num_inference_steps = }, which will be ignored.")
+            default_timesteps = kwargs.get("timesteps", None)
+            print(f"Replacing the given {default_timesteps = } with {timesteps = }.")
+            super().set_timesteps(timesteps=timesteps, **kwargs)
+    
+    return SchedulerWithFixedTimesteps
+
+
 def prepare_pipe(
     t2i_adapter_names: list[T2I_ADAPTER_NAME] = ["canny"],
     img2img=False,
+    inject_timesteps=False,
     **kwargs,
 ) -> DiffusionPipeline:
 
@@ -91,7 +111,12 @@ def prepare_pipe(
             base_model_id, unet=unet, vae=vae, adapter=adapter, torch_dtype=torch.float16, variant="fp16", 
         ).to("cuda")
 
-    pipe.scheduler = LCMScheduler.from_config(pipe.scheduler.config)
+    if inject_timesteps:
+        scheduler_cls = inject_timesteps_into_scheduler(LCMScheduler)
+        pipe.scheduler = scheduler_cls.from_config(pipe.scheduler.config)
+    else:
+        pipe.scheduler = LCMScheduler.from_config(pipe.scheduler.config)
+
     pipe.enable_xformers_memory_efficient_attention()
     
     return pipe
@@ -275,6 +300,7 @@ def parse_kwargs(omit_none=True) -> Namespace:
     parser.add_argument("--guidance_scale", "--cfg_scale", type=float)
     parser.add_argument("--strength", "--denoising_strength", type=float, default=1.0)
     parser.add_argument("--adapter_conditioning_scale", type=float, nargs="*") # list[float], Optional
+    parser.add_argument("--inject_timesteps", action="store_true")  # Default: False
 
     args = parser.parse_args()
     kwargs = vars(args)
