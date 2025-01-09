@@ -6,4 +6,6 @@ python 4step_t2i_adapter.py \
   --image="inputs/color_armor.png" \
   --batchsize 8 \
   --num_inference_steps 4 \
+  --img2img \
+  --mask_image="inputs/mask_armor.png" \
   --adapter_conditioning_scale 1.0 0.5

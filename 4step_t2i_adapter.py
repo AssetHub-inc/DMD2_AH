@@ -5,6 +5,7 @@ from argparse import ArgumentParser, Namespace
 from typing import Literal, Union
 
 from diffusers import DiffusionPipeline, StableDiffusionXLAdapterPipeline, T2IAdapter, MultiAdapter, AutoencoderKL, UNet2DConditionModel, LCMScheduler
+from diffusers.models import ControlNetModel
 from diffusers.pipelines.stable_diffusion_xl.pipeline_output import StableDiffusionXLPipelineOutput
 from diffusers.utils import load_image
 from controlnet_aux.canny import CannyDetector
@@ -49,6 +50,7 @@ def load_adapters(t2i_adapter_names: list[T2I_ADAPTER_NAME] = ["canny"]
 
 def prepare_pipe(
     t2i_adapter_names: list[T2I_ADAPTER_NAME] = ["canny"],
+    img2img=False,
     **kwargs,
 ) -> DiffusionPipeline:
 
@@ -62,9 +64,33 @@ def prepare_pipe(
     unet = UNet2DConditionModel.from_config(base_model_id, subfolder="unet").to("cuda", torch.float16)
     unet.load_state_dict(torch.load(hf_hub_download(repo_name, ckpt_name), map_location="cuda"))
 
-    pipe = StableDiffusionXLAdapterPipeline.from_pretrained(
-        base_model_id, unet=unet, vae=vae, adapter=adapter, torch_dtype=torch.float16, variant="fp16", 
-    ).to("cuda")
+    if img2img:
+        controlnet_depth = ControlNetModel.from_pretrained(
+            "diffusers/controlnet-depth-sdxl-1.0",
+            torch_dtype=torch.float16,
+            variant="fp16",
+            use_safetensors=True,
+        ).to("cuda")
+
+        # StableDiffusionXLControlNetAdapterInpaintPipeline
+        # https://github.com/huggingface/diffusers/blob/main/examples/community/README.md#controlnet--t2i-adapter--inpainting-pipeline
+        # https://github.com/huggingface/diffusers/blob/main/examples/community/pipeline_stable_diffusion_xl_controlnet_adapter_inpaint.py
+        pipe = DiffusionPipeline.from_pretrained(
+            pretrained_model_name_or_path=base_model_id,
+            custom_pipeline="pipeline_stable_diffusion_xl_controlnet_adapter_inpaint",
+            unet=unet,  # DMD2
+            vae=vae,
+            adapter=adapter,
+            controlnet=controlnet_depth,
+            torch_dtype=torch.float16,
+            variant="fp16",
+        ).to("cuda")
+
+    else: # txt2img
+        pipe = StableDiffusionXLAdapterPipeline.from_pretrained(
+            base_model_id, unet=unet, vae=vae, adapter=adapter, torch_dtype=torch.float16, variant="fp16", 
+        ).to("cuda")
+
     pipe.scheduler = LCMScheduler.from_config(pipe.scheduler.config)
     pipe.enable_xformers_memory_efficient_attention()
     
@@ -125,24 +151,45 @@ def preprocess_images(
     return preprocessed_images
 
 
+def create_all_white_mask(size=tuple[int]):
+    r"""
+    For the argument `mask_image` of an inpaint pipeline,
+    such as StableDiffusionXLControlNetAdapterInpaintPipeline,
+    White pixels in the mask will be repainted,
+    while black pixels will be preserved.
+    """
+    assert len(size) == 2, size
+
+    return Image.new(mode="I", size=size, color=255)  # Grayscale, white (255)
+
+
 def generate_images(
     pipe: DiffusionPipeline,
     preprocessors: list[PREPROCESSOR],
     image: str | Image.Image = "https://huggingface.co/Adapter/t2iadapter/resolve/main/figs_SDXLV1.0/org_canny.jpg",
+    mask_image: str | Image.Image | None = None,
     prompt = "Mystical fairy in real, magic, 4k picture, high quality",
     negative_prompt="",
     num_inference_steps=4,
     num_images_per_prompt=1,
     guidance_scale=0,
-    adapter_conditioning_scale: float | list[float] = 0.8, 
-    adapter_conditioning_factor=0.5,
-    timesteps=[999, 749, 499, 249],
+    adapter_conditioning_scale: float | list[float] = 0.8,
+    img2img=False,
+    adapter_conditioning_factor=0.5,  # Ignored if `is_inpaint` is True
+    timesteps=[999, 749, 499, 249],   # Ignored if `is_inpaint` is True
     **kwargs,
 ) -> list[Image.Image]:
 
     image = load_image(image)
+
+    if img2img:
+        if mask_image is None:
+            mask_image = create_all_white_mask(image.size)
+        else:
+            mask_image = load_image(mask_image)
+
     control_images = preprocess_images(image, preprocessors)
-    
+
     if len(control_images) == 1: # Single T2I Adapter
         # It needs to be a single float value
         if isinstance(adapter_conditioning_scale, list):
@@ -157,17 +204,40 @@ def generate_images(
             adapter_conditioning_scale = adapter_conditioning_scale * len(control_images)
 
     begin = time.time()
-    pipeline_output: StableDiffusionXLPipelineOutput = pipe(
-        prompt=prompt,
-        negative_prompt=negative_prompt,
-        image=control_images,
-        num_inference_steps=num_inference_steps,
-        num_images_per_prompt=num_images_per_prompt,
-        guidance_scale=guidance_scale,
-        adapter_conditioning_scale=adapter_conditioning_scale,
-        adapter_conditioning_factor=adapter_conditioning_factor,
-        timesteps=timesteps,
-    )
+
+    if img2img:
+        # StableDiffusionXLControlNetAdapterInpaintPipeline
+        pipeline_output: StableDiffusionXLPipelineOutput = pipe(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            image=image,
+            mask_image=mask_image,
+            adapter_image=control_images,
+            control_image=control_images[-1],
+            num_inference_steps=num_inference_steps,
+            num_images_per_prompt=num_images_per_prompt,
+            guidance_scale=guidance_scale,
+            adapter_conditioning_scale=adapter_conditioning_scale,
+            controlnet_conditioning_scale=1.0,
+            control_guidance_end=1e-8,  # Do NOT apply ControlNet at all, cannot be exactly 0.0
+            width=1024,
+            height=1024,
+        )
+
+    else:
+        # txt2img with T2I Adapter, StableDiffusionXLAdapterPipeline
+        pipeline_output: StableDiffusionXLPipelineOutput = pipe(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            image=control_images,
+            num_inference_steps=num_inference_steps,
+            num_images_per_prompt=num_images_per_prompt,
+            guidance_scale=guidance_scale,
+            adapter_conditioning_scale=adapter_conditioning_scale,
+            adapter_conditioning_factor=adapter_conditioning_factor,
+            timesteps=timesteps,
+        )
+
     end = time.time()
     print(f"Image generation time: {end - begin:.2f}sec")
     gen_images = pipeline_output.images
@@ -196,6 +266,8 @@ def parse_kwargs(omit_none=True) -> Namespace:
     parser.add_argument("--prompt", type=str)
     parser.add_argument("--negative_prompt", type=str)
     parser.add_argument("--image", type=str)
+    parser.add_argument("--mask_image", type=str)  # Inpaint mask
+    parser.add_argument("--img2img", action="store_true")  # Default: False
     parser.add_argument("--num_inference_steps", "--steps", type=int)
     parser.add_argument("--num_images_per_prompt", "--batchsize", type=int)
     parser.add_argument("--guidance_scale", "--cfg_scale", type=float)
