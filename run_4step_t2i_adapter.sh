@@ -1,13 +1,11 @@
 python 4step_t2i_adapter.py \
   --t2i_adapter_names canny depth_zoe \
   --preprocessor_names canny depth_zoe \
+  --adapter_conditioning_scale 0.6 0.3 \
   --prompt="Medieval knight armor, plain background, 4K HDR photo, high quality, masterpiece, extremely detailed, sharp, clear" \
-  --negative_prompt="worst quality, normal quality, low quality, low res, blurry, text, watermark, logo, banner, extra digits, cropped, jpeg artifacts, signature, username, error, sketch ,duplicate, ugly, monochrome, horror, geometry, mutation, disgusting" \
+  --negative_prompt="shadow, reflection, worst quality, normal quality, low quality, low res, blurry, text, watermark, logo, banner, extra digits, cropped, jpeg artifacts, signature, username, error, sketch, duplicate, ugly, monochrome, horror, geometry, mutation, disgusting" \
   --image="inputs/color_armor.png" \
-  --batchsize 8 \
-  --num_inference_steps 4 \
-  --strength 1.0 \
   --img2img \
-  --inject_timesteps \
-  --mask_image="inputs/mask_armor.png" \
-  --adapter_conditioning_scale 1.0 0.5
+  --strength 0.5 \
+  --num_inference_steps 4 \
+  --batchsize 8
