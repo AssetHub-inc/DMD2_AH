@@ -49,6 +49,31 @@ def load_adapters(t2i_adapter_names: list[T2I_ADAPTER_NAME] = ["canny"]
         return MultiAdapter(adapters)
 
 
+def load_loras_to_pipe(pipe: DiffusionPipeline | StableDiffusionXLAdapterPipeline,
+              loras: list[str],
+              lora_weights=1.0,
+              lora_dir="/workspace/models/loras/",
+) -> DiffusionPipeline | StableDiffusionXLAdapterPipeline:
+
+    if isinstance(lora_weights, (int, float)):
+        lora_weights = [float(lora_weights)] * len(loras)
+    elif len(loras) != len(lora_weights):
+        raise ValueError("The lengths of `lora_weights` should be the same as "
+                         + f"that of `loras` but {len(lora_weights)} were given.")
+
+    adapter_names = list()
+    for lora in loras:
+        adapter_name = os.path.splitext(lora)[0]
+        adapter_names.append(adapter_name)
+        pipe.load_lora_weights(lora_dir, weight_name=lora, adapter_name=adapter_name)
+
+    pipe.set_adapters(adapter_names, adapter_weights=lora_weights)
+    pipe.fuse_lora(adapter_names=adapter_names, lora_scale=1.0)
+    pipe.unload_lora_weights()
+
+    return pipe
+
+
 DMD2_TIMESTEPS = [999, 749, 499, 249]
 
 def inject_timesteps_into_scheduler(scheduler_cls: SchedulerMixin, timesteps=DMD2_TIMESTEPS):
@@ -70,6 +95,8 @@ def inject_timesteps_into_scheduler(scheduler_cls: SchedulerMixin, timesteps=DMD
 def prepare_pipe(
     t2i_adapter_names: list[T2I_ADAPTER_NAME] = ["canny"],
     img2img=False,
+    loras: list[str] | None = None,
+    lora_weights=1.0,
     inject_timesteps=False,
     **kwargs,
 ) -> DiffusionPipeline:
@@ -110,6 +137,9 @@ def prepare_pipe(
         pipe = StableDiffusionXLAdapterPipeline.from_pretrained(
             base_model_id, unet=unet, vae=vae, adapter=adapter, torch_dtype=torch.float16, variant="fp16", 
         ).to("cuda")
+
+    if loras is not None:
+        load_loras_to_pipe(pipe=pipe, loras=loras, lora_weights=lora_weights)
 
     if inject_timesteps:
         scheduler_cls = inject_timesteps_into_scheduler(LCMScheduler)
@@ -300,6 +330,8 @@ def parse_kwargs(omit_none=True) -> Namespace:
     parser.add_argument("--guidance_scale", "--cfg_scale", type=float)
     parser.add_argument("--strength", "--denoising_strength", type=float, default=1.0)
     parser.add_argument("--adapter_conditioning_scale", type=float, nargs="*") # list[float], Optional
+    parser.add_argument("--loras", type=str, nargs="*")  # list[str], Optional
+    parser.add_argument("--lora_weights", type=float, nargs="*")  # list[float], Optional
     parser.add_argument("--inject_timesteps", action="store_true")  # Default: False
 
     args = parser.parse_args()
