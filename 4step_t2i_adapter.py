@@ -173,6 +173,7 @@ def generate_images(
     num_inference_steps=4,
     num_images_per_prompt=1,
     guidance_scale=0,
+    strength=1.0,  # Denoising strength
     adapter_conditioning_scale: float | list[float] = 0.8,
     img2img=False,
     adapter_conditioning_factor=0.5,  # Ignored if `is_inpaint` is True
@@ -217,6 +218,7 @@ def generate_images(
             num_inference_steps=num_inference_steps,
             num_images_per_prompt=num_images_per_prompt,
             guidance_scale=guidance_scale,
+            strength=strength,  # Denoising strength
             adapter_conditioning_scale=adapter_conditioning_scale,
             controlnet_conditioning_scale=1.0,
             control_guidance_end=1e-8,  # Do NOT apply ControlNet at all, cannot be exactly 0.0
@@ -271,6 +273,7 @@ def parse_kwargs(omit_none=True) -> Namespace:
     parser.add_argument("--num_inference_steps", "--steps", type=int)
     parser.add_argument("--num_images_per_prompt", "--batchsize", type=int)
     parser.add_argument("--guidance_scale", "--cfg_scale", type=float)
+    parser.add_argument("--strength", "--denoising_strength", type=float, default=1.0)
     parser.add_argument("--adapter_conditioning_scale", type=float, nargs="*") # list[float], Optional
 
     args = parser.parse_args()
