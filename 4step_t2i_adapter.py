@@ -49,10 +49,11 @@ def load_adapters(t2i_adapter_names: list[T2I_ADAPTER_NAME] = ["canny"]
         return MultiAdapter(adapters)
 
 
-def load_loras_to_pipe(pipe: DiffusionPipeline | StableDiffusionXLAdapterPipeline,
-              loras: list[str],
-              lora_weights=1.0,
-              lora_dir="/workspace/models/loras/",
+def load_loras_to_pipe(
+    pipe: DiffusionPipeline | StableDiffusionXLAdapterPipeline,
+    loras: list[str],
+    lora_weights=1.0,
+    lora_dir="/workspace/models/loras/",
 ) -> DiffusionPipeline | StableDiffusionXLAdapterPipeline:
 
     if isinstance(lora_weights, (int, float)):
