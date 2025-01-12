@@ -16,6 +16,8 @@ from huggingface_hub import hf_hub_download
 from PIL import Image
 import torch
 
+from pipeline_stable_diffusion_xl_controlnet_adapter_inpaint import StableDiffusionXLControlNetAdapterInpaintPipeline
+
 
 # Orders of T2I_ADAPTER_NAME and T2I_ADAPTER_FULLNAME should match
 T2I_ADAPTER_NAME = Literal["canny", "depth_midas", "depth_zoe"]
@@ -123,9 +125,8 @@ def prepare_pipe(
         # StableDiffusionXLControlNetAdapterInpaintPipeline
         # https://github.com/huggingface/diffusers/blob/main/examples/community/README.md#controlnet--t2i-adapter--inpainting-pipeline
         # https://github.com/huggingface/diffusers/blob/main/examples/community/pipeline_stable_diffusion_xl_controlnet_adapter_inpaint.py
-        pipe = DiffusionPipeline.from_pretrained(
+        pipe = StableDiffusionXLControlNetAdapterInpaintPipeline.from_pretrained(
             pretrained_model_name_or_path=base_model_id,
-            custom_pipeline="pipeline_stable_diffusion_xl_controlnet_adapter_inpaint",
             unet=unet,  # DMD2
             vae=vae,
             adapter=adapter,

@@ -5,8 +5,9 @@ python 4step_t2i_adapter.py \
   --prompt="Medieval knight armor, plain background, 4K HDR photo, high quality, masterpiece, extremely detailed, sharp, clear" \
   --negative_prompt="shadow, reflection, worst quality, normal quality, low quality, low res, blurry, text, watermark, logo, banner, extra digits, cropped, jpeg artifacts, signature, username, error, sketch, duplicate, ugly, monochrome, horror, geometry, mutation, disgusting" \
   --loras "add-detail-xl.safetensors" "Fantasy_Armors_XL.safetensors" \
-  --lora_weights 1.0 0.5 \
+  --lora_weights 3.0 1.0 \
   --image="inputs/color_armor.png" \
-  --strength 0.5 \
+  --img2img \
+  --strength 1.0 \
   --num_inference_steps 4 \
   --batchsize 8
