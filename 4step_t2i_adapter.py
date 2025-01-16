@@ -95,7 +95,7 @@ def inject_timesteps_into_scheduler(scheduler_cls: SchedulerMixin, timesteps=DMD
     return SchedulerWithFixedTimesteps
 
 
-def prepare_pipe(
+def load_DMD2_pipe(
     t2i_adapter_names: list[T2I_ADAPTER_NAME] = ["canny"],
     img2img=False,
     loras: list[str] | None = None,
@@ -358,7 +358,7 @@ if __name__ == "__main__":
     kwargs = parse_kwargs()
     print(f"kwargs:\n{kwargs}")
 
-    pipe = prepare_pipe(**kwargs)
+    pipe = load_DMD2_pipe(**kwargs)
     preprocessors = load_preprocessors(**kwargs)
     gen_images = generate_images(pipe=pipe, preprocessors=preprocessors, **kwargs)
 
