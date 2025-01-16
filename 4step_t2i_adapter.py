@@ -110,9 +110,18 @@ def prepare_pipe(
     base_model_id = "stabilityai/stable-diffusion-xl-base-1.0"
     repo_name = "tianweiy/DMD2"
     ckpt_name = "dmd2_sdxl_4step_unet_fp16.bin"
-    # Load model.
-    unet = UNet2DConditionModel.from_config(base_model_id, subfolder="unet").to("cuda", torch.float16)
-    unet.load_state_dict(torch.load(hf_hub_download(repo_name, ckpt_name), map_location="cuda"))
+
+    # Load SDXL UNet model weights first.
+    unet = UNet2DConditionModel.from_config(
+        config=UNet2DConditionModel.load_config(base_model_id, subfolder="unet")
+    ).to("cuda", torch.float16)
+
+    # Load DMD2 UNet weights.
+    unet.load_state_dict(torch.load(
+        hf_hub_download(repo_name, ckpt_name),
+        map_location="cuda",
+        weights_only=True,
+    ))
 
     if img2img:
         controlnet_depth = ControlNetModel.from_pretrained(
