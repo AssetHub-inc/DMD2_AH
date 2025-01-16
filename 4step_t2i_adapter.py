@@ -52,11 +52,11 @@ def load_adapters(t2i_adapter_names: list[T2I_ADAPTER_NAME] = ["canny"]
 
 
 def load_loras_to_pipe(
-    pipe: DiffusionPipeline | StableDiffusionXLAdapterPipeline,
+    pipe: DiffusionPipeline | StableDiffusionXLAdapterPipeline | StableDiffusionXLControlNetAdapterInpaintPipeline,
     loras: list[str],
     lora_weights=1.0,
     lora_dir="/workspace/models/loras/",
-) -> DiffusionPipeline | StableDiffusionXLAdapterPipeline:
+) -> DiffusionPipeline | StableDiffusionXLAdapterPipeline | StableDiffusionXLControlNetAdapterInpaintPipeline:
 
     if isinstance(lora_weights, (int, float)):
         lora_weights = [float(lora_weights)] * len(loras)
