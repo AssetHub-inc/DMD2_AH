@@ -2,6 +2,7 @@ import time
 begin_import = time.time()
 print("Importing libraries...")
 
+import asyncio
 import os
 import typing
 from argparse import ArgumentParser, Namespace
@@ -53,12 +54,24 @@ def measure_execution_time(func):
     return wrapper
 
 
+def measure_async_execution_time(func):
+    async def wrapper(*args, **kwargs):
+        start_time = time.time()
+        print(f"Function '{func.__name__}()' is running...")
+        result = await func(*args, **kwargs)
+        end_time = time.time()
+        print(f"Function '{func.__name__}()' took {end_time - start_time:.2f} sec.")
+        return result
+    return wrapper
+
+
 def load_t2i_adapter(name: T2I_ADAPTER_NAME):
     fullname = T2I_ADAPTER_NAME_TO_FULLNAME[name]
     return T2IAdapter.from_pretrained(fullname, torch_dtype=torch.float16, varient="fp16").to("cuda")
 
 
-def load_adapters(t2i_adapter_names: list[T2I_ADAPTER_NAME] = ["canny"]
+@measure_async_execution_time
+async def load_adapters(t2i_adapter_names: list[T2I_ADAPTER_NAME] = ["canny"]
                   ) -> T2IAdapter | MultiAdapter:
 
     adapters = [load_t2i_adapter(name) for name in t2i_adapter_names]
@@ -112,20 +125,16 @@ def inject_timesteps_into_scheduler(scheduler_cls: SchedulerMixin, timesteps=DMD
     return SchedulerWithFixedTimesteps
 
 
-@measure_execution_time
-def load_DMD2_pipe(
-    t2i_adapter_names: list[T2I_ADAPTER_NAME] = ["canny"],
-    img2img=False,
-    loras: list[str] | None = None,
-    lora_weights=1.0,
-    inject_timesteps=False,
-    **kwargs,
-) -> DiffusionPipeline:
+@measure_async_execution_time
+async def load_vae(vae_name="madebyollin/sdxl-vae-fp16-fix"):
+    return AutoencoderKL.from_pretrained(vae_name, torch_dtype=torch.float16)
 
-    adapter = load_adapters(t2i_adapter_names)
-    vae=AutoencoderKL.from_pretrained("madebyollin/sdxl-vae-fp16-fix", torch_dtype=torch.float16)
 
-    base_model_id = "stabilityai/stable-diffusion-xl-base-1.0"
+@measure_async_execution_time
+async def load_DMD2_unet(
+    base_model_id="stabilityai/stable-diffusion-xl-base-1.0",
+) -> UNet2DConditionModel:
+
     repo_name = "tianweiy/DMD2"
     ckpt_name = "dmd2_sdxl_4step_unet_fp16.bin"
 
@@ -141,14 +150,51 @@ def load_DMD2_pipe(
         weights_only=True,
     ))
 
-    if img2img:
-        controlnet_depth = ControlNetModel.from_pretrained(
-            "diffusers/controlnet-depth-sdxl-1.0",
-            torch_dtype=torch.float16,
-            variant="fp16",
-            use_safetensors=True,
-        ).to("cuda")
+    return unet
 
+
+@measure_async_execution_time
+async def load_controlnet(model_name="diffusers/controlnet-depth-sdxl-1.0", disable=False):
+    if disable:
+        return None
+
+    controlnet = ControlNetModel.from_pretrained(
+        model_name,
+        torch_dtype=torch.float16,
+        variant="fp16",
+        use_safetensors=True,
+    ).to("cuda")
+
+    return controlnet
+
+
+@measure_async_execution_time
+async def load_DMD2_pipe(
+    t2i_adapter_names: list[T2I_ADAPTER_NAME] = ["canny"],
+    img2img=False,
+    loras: list[str] | None = None,
+    lora_weights=1.0,
+    inject_timesteps=False,
+    **kwargs,
+) -> DiffusionPipeline:
+
+    base_model_id = "stabilityai/stable-diffusion-xl-base-1.0"
+
+    begin_load = time.time()
+    print("Loading T2I Adapters, VAE, DMD2 UNet, and ControlNet...")
+
+    adapter, vae, unet, controlnet_depth = await asyncio.gather(
+        load_adapters(t2i_adapter_names),
+        load_vae(),
+        load_DMD2_unet(base_model_id=base_model_id),
+        # Disable ControlNet if txt2img (not img2img) as not needed by the pipeline
+        load_controlnet(disable=not img2img),
+    )
+
+    end_load = time.time()
+    print(f"Loading time (T2I Adapters, VAE, DMD2 UNet, and ControlNet): {end_load - begin_load:.2f} sec")
+
+    if img2img:
         # StableDiffusionXLControlNetAdapterInpaintPipeline
         # https://github.com/huggingface/diffusers/blob/main/examples/community/README.md#controlnet--t2i-adapter--inpainting-pipeline
         # https://github.com/huggingface/diffusers/blob/main/examples/community/pipeline_stable_diffusion_xl_controlnet_adapter_inpaint.py
@@ -181,8 +227,8 @@ def load_DMD2_pipe(
     return pipe
 
 
-@measure_execution_time
-def load_preprocessors(
+@measure_async_execution_time
+async def load_preprocessors(
     preprocessor_names: list[PREPROCESSOR_NAME] = ["canny"],
     **kwargs,
 ) -> list[PREPROCESSOR]:
@@ -376,15 +422,17 @@ def parse_kwargs(omit_none=True) -> Namespace:
     return kwargs
 
 
-if __name__ == "__main__":
+async def main():
     kwargs = parse_kwargs()
     print(f"kwargs:\n{kwargs}")
 
     begin_prep = time.time()
     print("Preparing DMD2 pipeline and preprocessors...")
 
-    pipe = load_DMD2_pipe(**kwargs)
-    preprocessors = load_preprocessors(**kwargs)
+    pipe, preprocessors = await asyncio.gather(
+        load_DMD2_pipe(**kwargs),
+        load_preprocessors(**kwargs),
+    )
 
     end_prep = time.time()
     print(f"Preparation time: {end_prep - begin_prep:.2f} sec")
@@ -392,3 +440,7 @@ if __name__ == "__main__":
     gen_images = generate_images(pipe=pipe, preprocessors=preprocessors, **kwargs)
 
     save_images(gen_images)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
