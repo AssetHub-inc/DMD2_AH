@@ -1,5 +1,8 @@
-import os
 import time
+begin_import = time.time()
+print("Importing libraries...")
+
+import os
 import typing
 from argparse import ArgumentParser, Namespace
 from typing import Literal, Union
@@ -18,6 +21,9 @@ import torch
 
 from pipeline_stable_diffusion_xl_controlnet_adapter_inpaint import StableDiffusionXLControlNetAdapterInpaintPipeline
 
+end_import = time.time()
+print(f"Library import time: {end_import - begin_import:.2f} sec")
+
 
 # Orders of T2I_ADAPTER_NAME and T2I_ADAPTER_FULLNAME should match
 T2I_ADAPTER_NAME = Literal["canny", "depth_midas", "depth_zoe"]
@@ -34,6 +40,17 @@ print(f"{T2I_ADAPTER_NAME_TO_FULLNAME = }")
 
 PREPROCESSOR = Union[CannyDetector, ZoeDetector, MidasDetector, None]
 PREPROCESSOR_NAME = Literal["canny", "depth_midas", "depth_zoe", "none"]
+
+
+def measure_execution_time(func):
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        print(f"Function '{func.__name__}()' is running...")
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        print(f"Function '{func.__name__}()' took {end_time - start_time:.2f} sec.")
+        return result
+    return wrapper
 
 
 def load_t2i_adapter(name: T2I_ADAPTER_NAME):
@@ -91,10 +108,11 @@ def inject_timesteps_into_scheduler(scheduler_cls: SchedulerMixin, timesteps=DMD
             default_timesteps = kwargs.get("timesteps", None)
             print(f"Replacing the given {default_timesteps = } with {timesteps = }.")
             super().set_timesteps(timesteps=timesteps, **kwargs)
-    
+
     return SchedulerWithFixedTimesteps
 
 
+@measure_execution_time
 def load_DMD2_pipe(
     t2i_adapter_names: list[T2I_ADAPTER_NAME] = ["canny"],
     img2img=False,
@@ -159,10 +177,11 @@ def load_DMD2_pipe(
         pipe.scheduler = LCMScheduler.from_config(pipe.scheduler.config)
 
     pipe.enable_xformers_memory_efficient_attention()
-    
+
     return pipe
 
 
+@measure_execution_time
 def load_preprocessors(
     preprocessor_names: list[PREPROCESSOR_NAME] = ["canny"],
     **kwargs,
@@ -192,6 +211,7 @@ def load_preprocessors(
     return preprocessors
 
 
+@measure_execution_time
 def preprocess_images(
     image: Image.Image,
     preprocessors: list[PREPROCESSOR],
@@ -229,6 +249,7 @@ def create_all_white_mask(size=tuple[int]):
     return Image.new(mode="I", size=size, color=255)  # Grayscale, white (255)
 
 
+@measure_execution_time
 def generate_images(
     pipe: DiffusionPipeline,
     preprocessors: list[PREPROCESSOR],
@@ -271,6 +292,7 @@ def generate_images(
             adapter_conditioning_scale = adapter_conditioning_scale * len(control_images)
 
     begin = time.time()
+    print(f"Generating {num_images_per_prompt} images...")
 
     if img2img:
         # StableDiffusionXLControlNetAdapterInpaintPipeline
@@ -307,7 +329,7 @@ def generate_images(
         )
 
     end = time.time()
-    print(f"Image generation time: {end - begin:.2f}sec")
+    print(f"Image generation time: {end - begin:.2f} sec")
     gen_images = pipeline_output.images
     
     return gen_images
@@ -358,8 +380,15 @@ if __name__ == "__main__":
     kwargs = parse_kwargs()
     print(f"kwargs:\n{kwargs}")
 
+    begin_prep = time.time()
+    print("Preparing DMD2 pipeline and preprocessors...")
+
     pipe = load_DMD2_pipe(**kwargs)
     preprocessors = load_preprocessors(**kwargs)
+
+    end_prep = time.time()
+    print(f"Preparation time: {end_prep - begin_prep:.2f} sec")
+
     gen_images = generate_images(pipe=pipe, preprocessors=preprocessors, **kwargs)
 
     save_images(gen_images)
