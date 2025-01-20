@@ -1,4 +1,4 @@
-python 4step_t2i_adapter.py \
+python t2i_adapter_4step.py \
   --t2i_adapter_names canny depth_zoe \
   --preprocessor_names canny depth_zoe \
   --adapter_conditioning_scale 1.0 0.6 \
