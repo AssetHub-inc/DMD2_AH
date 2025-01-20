@@ -185,33 +185,24 @@ async def load_DMD2_pipe(
     begin_load = time.time()
     print("Loading T2I Adapters, VAE, DMD2 UNet, and ControlNet...")
 
-    # Start tasks that will run concurrently.
     begin_tasks = time.time()
     print(f"Starting tasks (load T2I Adapters, VAE, and ControlNet)...")
+
     tasks = [
         asyncio.create_task(asyncio.to_thread(load_adapters, t2i_adapter_names)),
         asyncio.create_task(asyncio.to_thread(load_vae)),
         # Disable ControlNet if txt2img (not img2img) as not needed by the pipeline
         asyncio.create_task(asyncio.to_thread(load_controlnet, disable=not img2img)),
     ]
-    # task_load_unet = asyncio.create_task(load_DMD2_unet(base_model_id=base_model_id))
 
-    # adapter, vae, controlnet_depth = await asyncio.gather(
-    #     # load_DMD2_unet(base_model_id=base_model_id),
-    #     asyncio.to_thread(load_adapters, t2i_adapter_names),
-    #     asyncio.to_thread(load_vae),
-    #     # Disable ControlNet if txt2img (not img2img) as not needed by the pipeline
-    #     asyncio.to_thread(load_controlnet, disable=not img2img),
-    # )
+    # Start and await UNet loading first as it takes much longer.
     unet = await load_DMD2_unet(base_model_id=base_model_id)
-    # unet = load_DMD2_unet(base_model_id=base_model_id)
-
     adapter, vae, controlnet_depth = await asyncio.gather(*tasks)
+
     end_tasks = time.time()
     print(f"Threaded task execution time (T2I Adapters, VAE, and ControlNet): {end_tasks - begin_tasks:.2f} sec")
-    controlnet_depth = controlnet_depth.to("cuda", torch.float16)
 
-    # unet = await task_load_unet
+    controlnet_depth = controlnet_depth.to("cuda", torch.float16)
     unet = unet.to("cuda", torch.float16)
 
     end_load = time.time()
