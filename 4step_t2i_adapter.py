@@ -404,6 +404,17 @@ def generate_images(
     return gen_images
 
 
+async def load_pipe_and_preprocessors(**kwargs):
+    pipe, preprocessors = await asyncio.gather(
+        load_DMD2_pipe(**kwargs),
+        load_preprocessors(**kwargs),
+    )
+    pipe = pipe.to("cuda")
+    print(f"Device is: {pipe.device}")
+
+    return pipe, preprocessors
+
+
 def save_images(images: list[Image.Image], save_path="outputs/out_canny.png"):
     if len(images) == 0:
         raise ValueError("Input: `images` was empty.")
@@ -452,12 +463,7 @@ async def main():
     begin_prep = time.time()
     print("Preparing DMD2 pipeline and preprocessors...")
 
-    pipe, preprocessors = await asyncio.gather(
-        load_DMD2_pipe(**kwargs),
-        load_preprocessors(**kwargs),
-    )
-    pipe = pipe.to("cuda")
-    print(f"Device is: {pipe.device}")
+    pipe, preprocessors = await load_pipe_and_preprocessors(**kwargs)
 
     end_prep = time.time()
     print(f"Preparation time (pipeline + preprocessors): {end_prep - begin_prep:.2f} sec")
