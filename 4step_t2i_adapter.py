@@ -70,8 +70,8 @@ def load_t2i_adapter(name: T2I_ADAPTER_NAME):
     return T2IAdapter.from_pretrained(fullname, torch_dtype=torch.float16, varient="fp16").to("cuda")
 
 
-@measure_async_execution_time
-async def load_adapters(t2i_adapter_names: list[T2I_ADAPTER_NAME] = ["canny"]
+@measure_execution_time
+def load_adapters(t2i_adapter_names: list[T2I_ADAPTER_NAME] = ["canny"]
                   ) -> T2IAdapter | MultiAdapter:
 
     adapters = [load_t2i_adapter(name) for name in t2i_adapter_names]
@@ -125,8 +125,8 @@ def inject_timesteps_into_scheduler(scheduler_cls: SchedulerMixin, timesteps=DMD
     return SchedulerWithFixedTimesteps
 
 
-@measure_async_execution_time
-async def load_vae(vae_name="madebyollin/sdxl-vae-fp16-fix"):
+@measure_execution_time
+def load_vae(vae_name="madebyollin/sdxl-vae-fp16-fix"):
     return AutoencoderKL.from_pretrained(vae_name, torch_dtype=torch.float16)
 
 
@@ -141,7 +141,8 @@ async def load_DMD2_unet(
     # Load SDXL UNet model weights first.
     unet = UNet2DConditionModel.from_config(
         config=UNet2DConditionModel.load_config(base_model_id, subfolder="unet")
-    ).to("cuda", torch.float16)
+    )
+    # ).to("cuda", torch.float16)
 
     # Load DMD2 UNet weights.
     unet.load_state_dict(torch.load(
@@ -153,8 +154,8 @@ async def load_DMD2_unet(
     return unet
 
 
-@measure_async_execution_time
-async def load_controlnet(model_name="diffusers/controlnet-depth-sdxl-1.0", disable=False):
+@measure_execution_time
+def load_controlnet(model_name="diffusers/controlnet-depth-sdxl-1.0", disable=False):
     if disable:
         return None
 
@@ -163,7 +164,8 @@ async def load_controlnet(model_name="diffusers/controlnet-depth-sdxl-1.0", disa
         torch_dtype=torch.float16,
         variant="fp16",
         use_safetensors=True,
-    ).to("cuda")
+    )
+    # ).to("cuda")
 
     return controlnet
 
@@ -183,13 +185,34 @@ async def load_DMD2_pipe(
     begin_load = time.time()
     print("Loading T2I Adapters, VAE, DMD2 UNet, and ControlNet...")
 
-    adapter, vae, unet, controlnet_depth = await asyncio.gather(
-        load_adapters(t2i_adapter_names),
-        load_vae(),
-        load_DMD2_unet(base_model_id=base_model_id),
+    # Start tasks that will run concurrently.
+    begin_tasks = time.time()
+    print(f"Starting tasks (load T2I Adapters, VAE, and ControlNet)...")
+    tasks = [
+        asyncio.create_task(asyncio.to_thread(load_adapters, t2i_adapter_names)),
+        asyncio.create_task(asyncio.to_thread(load_vae)),
         # Disable ControlNet if txt2img (not img2img) as not needed by the pipeline
-        load_controlnet(disable=not img2img),
-    )
+        asyncio.create_task(asyncio.to_thread(load_controlnet, disable=not img2img)),
+    ]
+    # task_load_unet = asyncio.create_task(load_DMD2_unet(base_model_id=base_model_id))
+
+    # adapter, vae, controlnet_depth = await asyncio.gather(
+    #     # load_DMD2_unet(base_model_id=base_model_id),
+    #     asyncio.to_thread(load_adapters, t2i_adapter_names),
+    #     asyncio.to_thread(load_vae),
+    #     # Disable ControlNet if txt2img (not img2img) as not needed by the pipeline
+    #     asyncio.to_thread(load_controlnet, disable=not img2img),
+    # )
+    unet = await load_DMD2_unet(base_model_id=base_model_id)
+    # unet = load_DMD2_unet(base_model_id=base_model_id)
+
+    adapter, vae, controlnet_depth = await asyncio.gather(*tasks)
+    end_tasks = time.time()
+    print(f"Threaded task execution time (T2I Adapters, VAE, and ControlNet): {end_tasks - begin_tasks:.2f} sec")
+    controlnet_depth = controlnet_depth.to("cuda", torch.float16)
+
+    # unet = await task_load_unet
+    unet = unet.to("cuda", torch.float16)
 
     end_load = time.time()
     print(f"Loading time (T2I Adapters, VAE, DMD2 UNet, and ControlNet): {end_load - begin_load:.2f} sec")
@@ -213,7 +236,10 @@ async def load_DMD2_pipe(
             base_model_id, unet=unet, vae=vae, adapter=adapter, torch_dtype=torch.float16, variant="fp16", 
         ).to("cuda")
 
+    print(f"Loaded diffusers pipeline: {type(pipe)}")
+
     if loras is not None:
+        print(f"Loading LoRAs...: {loras}")
         load_loras_to_pipe(pipe=pipe, loras=loras, lora_weights=lora_weights)
 
     if inject_timesteps:
@@ -223,6 +249,8 @@ async def load_DMD2_pipe(
         pipe.scheduler = LCMScheduler.from_config(pipe.scheduler.config)
 
     pipe.enable_xformers_memory_efficient_attention()
+
+    print(f"Device at the end of 'load_DMD2_pipe()' is: {pipe.device}")
 
     return pipe
 
@@ -433,9 +461,12 @@ async def main():
         load_DMD2_pipe(**kwargs),
         load_preprocessors(**kwargs),
     )
+    pipe = pipe.to("cuda")
+    print(f"Device is: {pipe.device}")
 
     end_prep = time.time()
-    print(f"Preparation time: {end_prep - begin_prep:.2f} sec")
+    print(f"Preparation time (pipeline + preprocessors): {end_prep - begin_prep:.2f} sec")
+    print(f"Overall preparation time (imports + pipeline + preprocessors): {end_prep - begin_import:.2f} sec")
 
     gen_images = generate_images(pipe=pipe, preprocessors=preprocessors, **kwargs)
 
