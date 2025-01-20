@@ -427,7 +427,7 @@ def save_images(images: list[Image.Image], save_path="outputs/out_canny.png"):
             img.save(save_path_numbered)
 
 
-def parse_kwargs(omit_none=True) -> Namespace:
+def parse_kwargs(args=None, omit_none=True) -> Namespace:
     parser = ArgumentParser()
     parser.add_argument("--t2i_adapter_names", type=str, nargs="+",
                         choices=typing.get_args(T2I_ADAPTER_NAME)) # list[T2I_ADAPTER_NAME]
@@ -447,7 +447,7 @@ def parse_kwargs(omit_none=True) -> Namespace:
     parser.add_argument("--lora_weights", type=float, nargs="*")  # list[float], Optional
     parser.add_argument("--inject_timesteps", action="store_true")  # Default: False
 
-    args = parser.parse_args()
+    args = parser.parse_args(args=args)  # Use `sys.argv[1:]` by default
     kwargs = vars(args)
 
     if omit_none:
