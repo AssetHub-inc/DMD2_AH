@@ -188,6 +188,10 @@ async def load_DMD2_pipe(
     begin_tasks = time.time()
     print(f"Starting tasks (load T2I Adapters, VAE, and ControlNet)...")
 
+    # Start tasks that will run concurrently.
+    # TODO: Fix the orders and concurrency of async tasks.
+    # Somehow, print debugs told that `load_DMD2_unet()`
+    # still starts and finishes earlier than these async tasks .
     tasks = [
         asyncio.create_task(asyncio.to_thread(load_adapters, t2i_adapter_names)),
         asyncio.create_task(asyncio.to_thread(load_vae)),
