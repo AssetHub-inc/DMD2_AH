@@ -33,7 +33,7 @@ def get_args_from_string(args_str):
 class ImageGenInput():
     pass
 
-image = (
+container_image = (
     modal.Image.debian_slim(python_version="3.12")
     .apt_install(
         "libgl1",
@@ -71,7 +71,7 @@ image = (
     
 )
 
-app = modal.App("DMD2", image=image)
+app = modal.App("DMD2", image=container_image)
 
 @app.cls(
     gpu='a10g',
