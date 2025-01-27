@@ -10,6 +10,9 @@ from t2i_adapter_4step import (
     generate_images,
     parse_kwargs,
 )
+# TODO: replace them with those already used in `assethub-ml` repo.
+from input_types import ImageGenInput
+
 
 ARGS = """
   --t2i_adapter_names canny depth_zoe \
@@ -23,15 +26,12 @@ ARGS = """
   --img2img \
   --strength 1.0 \
   --num_inference_steps 4 \
-  --batchsize 8
+  --batchsize 1
 """
 
 def get_args_from_string(args_str):
     return shlex.split(args_str)
 
-
-class ImageGenInput():
-    pass
 
 container_image = (
     modal.Image.debian_slim(python_version="3.12")
@@ -49,6 +49,7 @@ container_image = (
         "accelerate",
         "controlnet_aux",
         "diffusers",
+        "fastapi[standard]",
         "huggingface-hub[hf_transfer]",
         "mediapipe",
         "peft",
@@ -99,13 +100,18 @@ class ImageGen:
               + f"{end_prep - begin_prep:.2f} sec")
 
     @modal.method()
-    async def run(self, image: Image.Image):
+    async def run(self, inputs: ImageGenInput):
+        kwargs = inputs.as_dict()
+        print(f"{kwargs = }")
+
         gen_images = generate_images(
             pipe=self.pipe,
             preprocessors=self.preprocessors,
-            image=image,
-            **self.kwargs
+            **kwargs,
         )
+        print(f"Generated {len(gen_images)} image(s) of size: {gen_images[0].size}.")
+
+        return gen_images
 
 
 if __name__ == "__main__":
