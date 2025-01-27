@@ -45,14 +45,15 @@ def main():
     )
     print(f"{inputs = }")
 
-    begin_image_gen = time.time()
+    for _ in range(10):
+        begin_image_gen = time.time()
 
-    # Calling Modal function
-    gen_images = modal_image_gen.run.remote(inputs=inputs)
+        # Calling Modal function
+        gen_images = modal_image_gen.run.remote(inputs=inputs)
 
-    end_image_gen = time.time()
-    print(f"Received {len(gen_images)} image(s) of size: {gen_images[0].size}.")
-    print(f"Image generation time (Client side): {end_image_gen - begin_image_gen:.2f} sec.")
+        end_image_gen = time.time()
+        print(f"Received {len(gen_images)} image(s) of size: {gen_images[0].size}.")
+        print(f"Image generation time (Client side): {end_image_gen - begin_image_gen:.2f} sec.")
 
 if __name__ == "__main__":
     begin = time.time()
