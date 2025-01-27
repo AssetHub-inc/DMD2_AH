@@ -26,7 +26,7 @@ ARGS = """
   --img2img \
   --strength 1.0 \
   --num_inference_steps 4 \
-  --batchsize 1
+  --num_images_per_prompt 1
 """
 
 def get_args_from_string(args_str):

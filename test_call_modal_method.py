@@ -18,7 +18,7 @@ def parse_args() -> Namespace:
                         help="Path to the mask image file.")
     parser.add_argument("--prompt", type=str,
                         default="Medieval knight armor, plain background, 4K HDR photo, high quality, masterpiece, extremely detailed, sharp, clear")
-    parser.add_argument("--batchsize", type=int, default=1)
+    parser.add_argument("--num_images_per_prompt", type=int, default=4)
 
     return parser.parse_args()
 
@@ -41,7 +41,7 @@ def main():
         image=color_image,
         mask_image=mask_image,
         prompt=args.prompt,
-        batchsize=args.batchsize,
+        num_images_per_prompt=args.num_images_per_prompt,
     )
     print(f"{inputs = }")
 

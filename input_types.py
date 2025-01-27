@@ -22,7 +22,7 @@ class ImageGenInput:
     num_inference_steps: int = 4
 
     # batchsize=8 caused OOM on A10G GPU on Modal only with 24 GB VRAM
-    batchsize: int = 1
+    num_images_per_prompt: int = 1
 
     def as_dict(self):
         return asdict(self)
