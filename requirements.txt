@@ -1,5 +1,5 @@
 anyio
-torch==2.0.1  
+torch==2.8.0  
 torchvision==0.15.2
 git+https://github.com/openai/CLIP.git
 open_clip_torch 
